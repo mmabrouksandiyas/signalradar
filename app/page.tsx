@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import RunRiskButton from "@/app/components/RunRiskButton";
 import RunIngestButton from "@/app/components/RunIngestButton";
 import RunClusterButton from "@/app/components/RunClusterButton";
 
@@ -32,6 +33,7 @@ export default async function Page() {
 <div className="flex flex-wrap items-center gap-3">
   <RunIngestButton />
   <RunClusterButton />
+  <RunRiskButton/>
 </div>
 
           

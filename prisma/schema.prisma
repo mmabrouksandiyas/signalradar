@@ -1,0 +1,196 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum SourceType {
+  RSS
+  REDDIT
+}
+
+enum IssueStatus {
+  EMERGING
+  ACTIVE
+  STABILIZING
+  DYING
+}
+
+enum RecommendationAction {
+  IGNORE
+  MONITOR
+  PREPARE
+  ESCALATE
+}
+
+enum RecommendationOwner {
+  PR
+  LEGAL
+  CX
+  EXEC
+}
+
+enum RecommendationPosture {
+  SILENT
+  CORRECTIVE
+  PROACTIVE
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  users     User[]
+  brands    Brand[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id             String        @id @default(cuid())
+  email          String        @unique
+  name           String?
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model Brand {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  name           String
+  aliases        String[] @default([])
+  competitors    String[] @default([])
+
+  sources        Source[]
+  mentions       Mention[]
+  issues         Issue[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model Source {
+  id        String    @id @default(cuid())
+  brandId   String
+  brand     Brand     @relation(fields: [brandId], references: [id])
+
+  type      SourceType
+  name      String
+  config    Json
+
+  isEnabled Boolean   @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([brandId, type])
+}
+
+model Mention {
+  id              String    @id @default(cuid())
+  brandId          String
+  brand            Brand     @relation(fields: [brandId], references: [id])
+
+  sourceType       SourceType
+  sourceName       String
+  url              String
+  urlHash          String
+  author           String?
+  text             String
+  language         String?
+  createdAt        DateTime
+  ingestedAt       DateTime @default(now())
+  engagementProxy  Int      @default(0)
+  rawJson          Json?
+
+  issueMentions    IssueMention[]
+
+  @@unique([brandId, urlHash])
+  @@index([brandId, createdAt])
+}
+
+model Issue {
+  id        String      @id @default(cuid())
+  brandId   String
+  brand     Brand       @relation(fields: [brandId], references: [id])
+
+  title     String
+  summary   String?
+  status    IssueStatus @default(EMERGING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  mentions  IssueMention[]
+  risk      RiskScore?
+  rec       Recommendation?
+  alerts    Alert[]
+
+  @@index([brandId, status])
+}
+
+model IssueMention {
+  issueId   String
+  mentionId String
+
+  issue     Issue   @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  mention   Mention @relation(fields: [mentionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([issueId, mentionId])
+  @@index([mentionId])
+}
+
+model RiskScore {
+  issueId          String  @id
+  issue            Issue   @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  score0to100      Int
+  velocityScore    Int
+  authorityScore   Int
+  severityScore    Int
+  spreadScore      Int
+  sentimentScore   Int
+  patternScore     Int
+
+  escalation24h    Int
+  escalation72h    Int
+
+  computedAt       DateTime @default(now())
+}
+
+model Recommendation {
+  issueId    String @id
+  issue      Issue  @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  action     RecommendationAction
+  owner      RecommendationOwner
+  posture    RecommendationPosture
+  rationale  String
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Alert {
+  id          String   @id @default(cuid())
+  issueId     String
+  issue       Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  type        String
+  threshold   Int?
+  deliveredAt DateTime?
+
+  createdAt   DateTime @default(now())
+
+  @@index([issueId, createdAt])
+}
